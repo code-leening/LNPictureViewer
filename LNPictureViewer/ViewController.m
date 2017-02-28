@@ -35,10 +35,10 @@
     NSArray *imageArray = @[@"http://ww3.sinaimg.cn/large/006ka0Iygw1f6bqm7zukpj30g60kzdi2.jpg",
                             @"http://ww1.sinaimg.cn/large/61b69811gw1f6bqb1bfd2j20b4095dfy.jpg",
                             @"http://ww1.sinaimg.cn/large/54477ddfgw1f6bqkbanqoj20ku0rsn4d.jpg"];
-    LNPictureView *pickView = [[LNPictureView alloc] init];
-    pickView.viewAlpha = 1;
-    pickView.imageArray = imageArray;
-    [pickView showLNPictureViewAndIndex:1];//显示第几张图片
+    LNPictureView *pictureView = [[LNPictureView alloc] init];
+    pictureView.viewAlpha = 1;
+    pictureView.imageArray = imageArray;
+    [pictureView showLNPictureViewAndIndex:1];//显示第几张图片
 }
 
 
