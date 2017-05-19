@@ -10,6 +10,7 @@
 
 @interface LNPictureView : UIView
 
+@property (nonatomic,assign) BOOL isScalePinchGesture;//是否添加放大和缩小手势（默认不添加）
 @property (nonatomic,assign) CGFloat viewAlpha;//遮罩层的透明度
 @property (nonatomic,strong) NSArray *imageArray;//图片网址数组
 

@@ -12,8 +12,12 @@
 
 #define LNScreenHeigth [UIScreen mainScreen].bounds.size.height
 #define LNScreenWidth [UIScreen mainScreen].bounds.size.width
+#define RGBColorAlpha(r,g,b,a) [UIColor colorWithRed:(r)/255.0f green:(g)/255.0f blue:(b)/255.0f alpha:(a)]
 
-@interface LNPictureView ()<UIScrollViewDelegate>
+@interface LNPictureView ()<UIScrollViewDelegate,UIGestureRecognizerDelegate>
+{
+    CGFloat lastScale;
+}
 
 @property (nonatomic,strong) UIScrollView *scrollView;
 @property (nonatomic,strong) UIPageControl *pageControl;
@@ -50,7 +54,7 @@
 
 -(void)setViewAlpha:(CGFloat)viewAlpha
 {
-    self.alpha = viewAlpha;
+    self.backgroundColor = RGBColorAlpha(0, 0, 0, viewAlpha);
 }
 
 -(void)setImageArray:(NSArray *)imageArray
@@ -58,6 +62,12 @@
     _imageArray = imageArray;
     [self creatImageView];
 }
+
+-(void)setIsScalePinchGesture:(BOOL)isScalePinchGesture
+{
+    _isScalePinchGesture = isScalePinchGesture;
+}
+
 
 -(void)creatImageView
 {
@@ -67,6 +77,14 @@
         imageView.contentMode = UIViewContentModeScaleAspectFit;
         [self.scrollView addSubview:imageView];
         [_imageViewArr addObject:imageView];
+        
+        if (_isScalePinchGesture) {
+            imageView.userInteractionEnabled = YES;
+            
+            UIPinchGestureRecognizer *pinchRecognizer = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(scaGesture:)];
+            [pinchRecognizer setDelegate:self];
+            [imageView addGestureRecognizer:pinchRecognizer];
+        }
     }
 }
 
@@ -78,27 +96,31 @@
     [self addSubview:self.progressView];
     
     //先加载第一张图片
-    UIImageView *imageView = [[UIImageView alloc] init];
-    imageView.frame = CGRectMake(LNScreenWidth*index, 0, LNScreenWidth, LNScreenWidth*1.5);
-    imageView.contentMode = UIViewContentModeScaleAspectFit;
-    [imageView sd_setImageWithURL:[NSURL URLWithString:_imageArray[index]] placeholderImage:nil options:0 progress:^(NSInteger receivedSize, NSInteger expectedSize) {
-        [_progressView setHidden:NO];
-        CGFloat x = receivedSize/1.0;
-        _progressView.progressValue = receivedSize/expectedSize;
-        NSLog(@"第0张*****总大小：%ld  已下载：%ld===下载百分比：%f",expectedSize,receivedSize,x/expectedSize);
-    } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL) {
-        if (image) {
-            [_progressView setHidden:YES];
-        }
-    }];
+    UIImageView *imageV = (UIImageView *)_imageViewArr[index];
+    
+    if ([_imageArray[index] isKindOfClass:[UIImage class]]) {
+        imageV.image = _imageArray[index];
+        [_progressView setHidden:YES];
+    }else{
+        [imageV sd_setImageWithURL:[NSURL URLWithString:_imageArray[index]] placeholderImage:nil options:0 progress:^(NSInteger receivedSize, NSInteger expectedSize) {
+            [_progressView setHidden:NO];
+            CGFloat x = receivedSize/1.0;
+            _progressView.progressValue = receivedSize/expectedSize;
+            NSLog(@"第%ld张*****总大小：%ld  已下载：%ld===下载百分比：%f",index,expectedSize,receivedSize,x/expectedSize);
+        } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL) {
+            if (image) {
+                [_progressView setHidden:YES];
+            }
+        }];
+    }
     _pageControl.currentPage = index;
     [_scrollView setContentOffset:CGPointMake(LNScreenWidth*index, 0) animated:NO];
-    [_scrollView addSubview:imageView];
     [self addSubview:self.progressView];
 }
 
 -(void)hidenLNPictureView
 {
+    [self addScaleAnimation:self];
     [UIView animateWithDuration:0.3 animations:^{
         self.alpha = 0;
     }completion:^(BOOL finished) {
@@ -106,11 +128,43 @@
     }];
 }
 
+-(void)addScaleAnimation:(UIView *)animationView
+{
+    CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+    animation.values = @[@0.9,@0.6,@0.3,@0.1,@0.0];
+    animation.duration = 0.3;
+    animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+    [animationView.layer addAnimation:animation forKey:@"frame"];
+}
+
+
+
 #pragma mark - UIScroolViewDelegate
 -(void)scrollViewDidEndDecelerating:(UIScrollView *)scrollView
 {
     NSInteger index = scrollView.contentOffset.x/LNScreenWidth;
     _pageControl.currentPage = index;
+    
+    if (_isScalePinchGesture) {
+        //****清除放大、缩小效果***
+        NSInteger transformIndex = index;
+        static float newx = 0;
+        static float oldx = 0;
+        newx= scrollView.contentOffset.x ;
+        if (newx > oldx) {
+            transformIndex -= 1;
+            transformIndex = transformIndex < 0 ? 0:transformIndex;
+            NSLog(@"r");
+        }else if(newx < oldx || newx == oldx){
+            transformIndex += 1;
+            transformIndex = transformIndex>_imageArray.count || transformIndex==_imageArray.count ?_imageArray.count-1:transformIndex;
+            NSLog(@"l");
+        }
+        oldx = newx;
+        UIImageView *transformImageV = (UIImageView *)_imageViewArr[transformIndex];
+        [transformImageV setTransform:CGAffineTransformIdentity];
+        //****清除放大、缩小效果***
+    }
     
     
     UIImageView *imageV = (UIImageView *)_imageViewArr[index];
@@ -126,6 +180,31 @@
     }];
     
 }
+
+#pragma mark - UIPinchGestureRecognizer （加入放大、缩小手势的执行方法）
+-(void)scaGesture:(id)sender {
+    [self bringSubviewToFront:[(UIPinchGestureRecognizer*)sender view]];
+    //当手指离开屏幕时,将lastscale设置为1.0
+    if([(UIPinchGestureRecognizer*)sender state] == UIGestureRecognizerStateEnded) {
+        lastScale = 1.0;
+        return;
+    }
+    
+    CGFloat scale = 1.0 - (lastScale - [(UIPinchGestureRecognizer*)sender scale]);
+    CGAffineTransform currentTransform = [(UIPinchGestureRecognizer*)sender view].transform;
+    CGAffineTransform newTransform = CGAffineTransformScale(currentTransform, scale, scale);
+    [[(UIPinchGestureRecognizer*)sender view]setTransform:newTransform];
+    lastScale = [(UIPinchGestureRecognizer*)sender scale];
+}
+
+#pragma mark - UIGestureRecognizerDelegate （加入手势的代理方法）
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return ![gestureRecognizer isKindOfClass:[UIPanGestureRecognizer class]];
+}
+
+
+
 
 
 
